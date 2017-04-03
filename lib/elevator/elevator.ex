@@ -10,13 +10,15 @@ defmodule Elevator.Elevator do
   @moduledoc """
   Module for managing state and event management of an individual elevator.
   """
+  @tick_interval 1000
 
   @doc """
   Given the elevator's `initial_state`, assign it a `state_machine` for resolving
   state transitions and start receiving events.
   """
   def start_elevator(initial_state) do
-    update_elevator(initial_state)
+    timer = start_timer()
+    update_elevator({initial_state | context: %{ initial_state.context | timer: timer }})
   end
 
   defp update_elevator(state) do
@@ -59,6 +61,12 @@ defmodule Elevator.Elevator do
       [] ->
         %Elevator{ current: floor, direction: :idle }
     end
+  end
+
+  # Function to start the timer
+  defp start_timer() do
+    { _, timer } = :timer.send_interval @tick_interval, self(), { :tick }
+    timer
   end
 
   defp enqueue(floor_request = {:request, from, to}, state = { context: %{ lowest_floor: lf, highest_floor: hf }}) do
