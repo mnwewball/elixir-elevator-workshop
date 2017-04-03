@@ -11,7 +11,6 @@ defmodule ElevatorTest do
     { :ok, initial_state: initial_state, pid: pid }
   end
 
-  @tag timeout: 30
   test "starts an elevator", %{ initial_state: initial_state, pid: pid } do
     
     state = get_info pid
@@ -23,7 +22,7 @@ defmodule ElevatorTest do
 
   test "the elevator moves on every clock tick", %{ initial_state: initial_state, pid: pid } do
 
-    request_floors pid, [2]
+    request_floors pid, [{2, 3}]
 
     # 3.5s would give us enough time for the elevator to move
     :timer.sleep(2500)
@@ -41,7 +40,7 @@ defmodule ElevatorTest do
 
     request_floors pid, [{2, 3}, {5, 8}, {-1, 0}, {2, 10}, {8, -2}]
 
-    expected_queue = [2, 5, -1, 8]
+    expected_queue = [{:request, 2, 3}, {:request, 5, 8}, {:request, -1, 0}, {:request, 8, -2}]
 
     state = get_info pid
 
