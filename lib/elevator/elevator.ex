@@ -45,22 +45,28 @@ defmodule Elevator.Elevator do
     # elevator in the direction of the next floor in the queue. Otherwise, leave 
     # the elevator idle.
     case queue do
-      [ next | remaining ] when head == floor ->
-        %Elevator{ current: floor, direction: :idle, moving?: false, queue: remaining }
-      [ next | remaining ] ->
-        direction = if floor - head < 0 do :up else :down end
-        %Elevator{ current: floor, direction: direction, queue: remaining }
+      [ { :request, from, to }  | remaining ] when from == floor ->
+        new_queue = enqueue({:destination, to}, remaining)
+        %Elevator{ state | direction: :idle, moving?: false, queue: new_queue }
+      [ { :request, from, _ } | _ ] ->
+        direction = if floor < from do :up else :down end
+        %Elevator{ state | direction: direction }
+      [ { :destination, to } | remaining ] when to == floor ->
+        %Elevator{ state | direction: :idle, moving?: false, queue: remaining }
+      [ { :destination, to } | _ ] ->
+        direction = if floor < to do :up else :down end
+        %Elevator{ state | direction: direction }
       [] ->
         %Elevator{ current: floor, direction: :idle }
     end
   end
 
-  defp enqueue(floor, state) do
+  defp enqueue(floor_request, state) do
     # Adds a floor to the queue if it's not already there
-    if Enum.member?(state.queue, floor) do
+    if Enum.member?(state.queue, floor_request) do
       state
     else
-      %Elevator{ state | queue: queue ++ [ floor ] }
+      %Elevator{ state | queue: queue ++ [ floor_request ] }
     end
   end
 
