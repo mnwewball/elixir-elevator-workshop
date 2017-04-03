@@ -61,9 +61,10 @@ defmodule Elevator.Elevator do
     end
   end
 
-  defp enqueue(floor_request, state) do
+  defp enqueue(floor_request = {:request, from, to}, state = { context: %{ lowest_floor: lf, highest_floor: hf }}) do
+
     # Adds a floor to the queue if it's not already there
-    if Enum.member?(state.queue, floor_request) do
+    if from < lf or from > hf or to < lf or to > hf or from == to or Enum.member?(state.queue, floor_request) do
       state
     else
       %Elevator{ state | queue: queue ++ [ floor_request ] }
