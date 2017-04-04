@@ -14,26 +14,59 @@ defmodule Elevator.Elevator do
 
   # Define the elevator's bootstrap function
   def start_elevator(initial_state) do
-    # Print some debugging messages
     
-    # Start the timer
-
-    # Call the update_elevator function
-
+    sm_pid = spawn fn () -> Elevator.StateManager.init(initial_state) end
+    process_events(sm_pid)
   end
 
-  defp process_events() do
+  defp process_events(sm_pid) do
     receive do
-      event -> handle_event(event)
+      event -> handle_event(event, sm_pid)
     end
   end
 
   # Function to handle events
-  defp handle_event({ :tick }) do
-    
+  defp handle_event({ :tick }, sm_pid) do
+    state = fetch_state(sm_pid)
+
+    case state do
+      %{ current: current, queue: queue, action: action } ->
+        case queue do
+          [ { from, _ } | tail ] when from > current ->
+            update_state sm_pid, %{ state | action: :up }
+          [ { from, _ } | tail ] when from < current ->
+            update_state sm_pid, %{ state | action: :down }
+          [ { from, to } | tail ] when from == current ->
+            new_queue = [ { to } ] ++ tail
+            update_state sm_pid, %{ state | action: :open_doors, queue: new_queue }
+          [ { to } | tail ] when from > current ->
+            update_state sm_pid, %{ state | action: :up }
+          [ { to } | tail ] when from < current ->
+            update_state sm_pid, %{ state | action: :down }
+          [ { to } | tail ] when from == current ->
+            update_state sm_pid, %{ state | action: :open_doors, queue: tail }
+          [] -> update_state sm_pid, %{ state | action: :idle }
+        end
+        
+    end
   end
-  defp handle_event({ :request, from, to }) do
-    
+  defp handle_event({ :request, from, to }, sm_pid) do
+    state = fetch_state(sm_pid)
+    %{ queue: queue } = state
+    new_queue = queue ++ [ { from, to } ]
+    update_state %{ state | queue: new_queue }
+  end
+
+  defp fetch_state(sm_pid) do
+    send sm_pid, { :fetch, self() }
+    receive do
+      { :fetched, state } ->
+        state
+    end
+  end
+
+  defp update_state(sm_pid, new_state) do
+    send sm_pid, { :update, new_state }
   end
 
     # Receive messages
