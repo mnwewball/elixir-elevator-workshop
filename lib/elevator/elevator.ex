@@ -7,18 +7,34 @@ defmodule Elevator do
 end
 
 # Define the module which will host the elevator's functionality
+defmodule Elevator.Elevator do
 
   # The tick interval for updating the elevator state
+  @tick_interval 1000
 
   # Define the elevator's bootstrap function
-  
+  def start_elevator(initial_state) do
     # Print some debugging messages
     
     # Start the timer
 
     # Call the update_elevator function
 
-  # Function to update elevator's state
+  end
+
+  defp process_events() do
+    receive do
+      event -> handle_event(event)
+    end
+  end
+
+  # Function to handle events
+  defp handle_event({ :tick }) do
+    
+  end
+  defp handle_event({ :request, from, to }) do
+    
+  end
 
     # Receive messages
     
