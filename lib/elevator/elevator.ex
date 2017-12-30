@@ -1,71 +1,146 @@
-defmodule ElevatorContext do
-  defstruct lowest_floor: 0, highest_floor: 0
-end
-
-defmodule Elevator do
-  defstruct current: 0, direction: :idle, status: :ok, moving?: false, queue: [], context: %ElevatorContext{}
-end
-
+# Define the module which will host the elevator's functionality
 defmodule Elevator.Elevator do
-  @moduledoc """
-  Module for managing state and event management of an individual elevator.
-  """
 
-  @doc """
-  Given the elevator's `initial_state`, assign it a `state_machine` for resolving
-  state transitions and start receiving events.
-  """
-  def start_elevator(initial_state) do
-    update_elevator(initial_state)
+  use GenServer
+
+  alias Elevator.State
+  alias Elevator.StateDynamics
+
+  # The tick interval for updating the elevator state
+  @tick_interval 1000
+
+
+  def create(config) do
+
+    result = GenServer.start_link(__MODULE__, config, name: config.name)
+
+    elevators = State.fetch()
+    State.update([ config.name | elevators ])
+
+    result
+  
   end
 
-  defp update_elevator(state) do
-    IO.puts "In update_elevator"
-    receive do
-      # A clock tick event
-      { :tick } ->
-        state |> state_machine_naive |> update_elevator
-      # A get info event
-      { :get_info, pid } ->
-        { :returned_info, state } |> answer_back_state(pid)
-        state |> update_elevator
-      # The elevator has been requested
-      { :request, floor } ->
-        floor |> enqueue(state) |> update_elevator
-      # dismount gracefully tears down the elevator
-      { :dismount } -> { :ok }
+
+  def turn_off(elevator) do
+
+    GenServer.stop(elevator)
+
+    elevators = State.fetch()
+    State.update(Enum.filter(elevators, fn item -> item != elevator end))
+
+  end
+
+
+  def make_request(elevator, request) do
+
+    GenServer.call(elevator, {:request, request})
+
+  end
+
+
+  def cancel_request(elevator, request) do
+    
+    GenServer.call(elevator, {:cancel, request})
+
+  end
+
+
+  def current_state(elevator) do
+    
+    State.fetch(elevator)
+
+  end
+
+
+  def current_elevators() do
+
+    State.fetch()
+
+  end
+
+
+  # Define the elevator's bootstrap function
+  def init(config) do
+
+    # Create an atom to associate with the SM of this elevator
+    elevator_name = config.name
+
+    {:ok, initial_state} = State.create(elevator_name)
+    State.update(elevator_name, %{initial_state | timer: start_timer()})
+
+    {:ok, elevator_name}
+
+  end
+
+
+  # Function to handle events
+  def handle_call(command, _from, elevator) do
+    
+    result = handle_command(command, elevator)
+
+    case result do
+      {:ok, new_state} ->
+        State.update(elevator, new_state)
+        {:reply, :ok, elevator}
+      
+      {:error, _} ->
+        {:reply, result, elevator}
     end
+
   end
 
-  @doc """
-  """
-  defp state_machine_naive(:make_stop, state = { floor, direction, _, _, queue }) do
 
-    # Check if there are any floors left to visit in the queue. If so, move the
-    # elevator in the direction of the next floor in the queue. Otherwise, leave 
-    # the elevator idle.
-    case queue do
-      [ next | remaining ] when head == floor ->
-        %Elevator{ current: floor, direction: :idle, moving?: false, queue: remaining }
-      [ next | remaining ] ->
-        direction = if floor - head < 0 do :up else :down end
-        %Elevator{ current: floor, direction: direction, queue: remaining }
-      [] ->
-        %Elevator{ current: floor, direction: :idle }
+  def handle_cast(command, _from, elevator) do
+
+    handle_info(command, elevator)
+
+  end
+
+
+  def handle_info(command, elevator) do
+
+    result = handle_command(command, elevator)
+
+    case result do
+      {:ok, new_state} ->
+        State.update(elevator, new_state)
+        {:noreply, elevator}
+      
+      _ ->
+        {:noreply, elevator}
     end
+
   end
 
-  defp enqueue(floor, state) do
-    # Adds a floor to the queue if it's not already there
-    if Enum.member?(state.queue, floor) do
-      state
-    else
-      %Elevator{ state | queue: queue ++ [ floor ] }
+
+  defp handle_command(command, elevator) do
+
+    state = State.fetch(elevator)
+
+    case command do
+      :tick ->
+        StateDynamics.transition(state)
+      
+      {:request, request} ->
+        StateDynamics.add_request(state, request)
+      
+      {:cancel, request} ->
+        StateDynamics.cancel_request(state, request)
+      
+      _ ->
+        {:error, 'Invalid command'}
     end
+
+  end
+    
+
+  # Function to start the timer
+  defp start_timer() do
+
+    { _, timer } = :timer.send_interval(@tick_interval, self(), :tick)
+    timer
+
   end
 
-  defp answer_back_state(state, pid) do
-    # Answers back a message
-    send pid, state
-  end
 end
